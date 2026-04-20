@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import ParamSlider from "@/components/ParamSlider";
 import MetricCard from "@/components/MetricCard";
 import PlotlyChart from "@/components/PlotlyChart";
+import CircuitDiagram from "@/components/CircuitDiagram";
 import { calculate, generateWaveforms } from "@/lib/simulation";
 
 export default function Simulator() {
@@ -202,6 +203,18 @@ export default function Simulator() {
             color="purple"
           />
         </div>
+
+        {/* Circuit Diagram */}
+        <CircuitDiagram
+          vin={vin}
+          vout={results.vout}
+          dutyCycle={params.dutyCycle}
+          frequency={params.frequency}
+          inductance={params.inductance}
+          capacitance={params.capacitance}
+          resistance={resistance}
+          iLAvg={results.iLAvg}
+        />
 
         {/* Charts */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

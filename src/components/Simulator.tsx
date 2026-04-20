@@ -205,16 +205,7 @@ export default function Simulator() {
         </div>
 
         {/* Circuit Diagram */}
-        <CircuitDiagram
-          vin={vin}
-          vout={results.vout}
-          dutyCycle={params.dutyCycle}
-          frequency={params.frequency}
-          inductance={params.inductance}
-          capacitance={params.capacitance}
-          resistance={resistance}
-          iLAvg={results.iLAvg}
-        />
+        <CircuitDiagram params={params} results={results} />
 
         {/* Charts */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -265,7 +256,7 @@ export default function Simulator() {
 
         {/* CCM / DCM indicator */}
         <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 flex items-center gap-4">
-          {results.iLAvg - results.deltaIL / 2 > 0 ? (
+          {results.isCCM ? (
             <>
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 text-sm font-bold">
                 ✓
@@ -276,7 +267,7 @@ export default function Simulator() {
                 </p>
                 <p className="text-xs text-gray-500">
                   Inductor current never reaches zero — I<sub>L,min</sub> ={" "}
-                  {(results.iLAvg - results.deltaIL / 2).toFixed(3)} A
+                  {results.iLMin.toFixed(3)} A
                 </p>
               </div>
             </>

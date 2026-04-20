@@ -13,6 +13,17 @@ export interface SimResults {
   iLAvg: number;
   iOut: number;
   deltaVout: number;
+  // Per-component values
+  iLMin: number;
+  iLMax: number;
+  vL_on: number;   // voltage across inductor during switch ON
+  vL_off: number;  // voltage across inductor during switch OFF
+  iDiode: number;  // average diode current
+  pIn: number;     // input power
+  pOut: number;    // output power
+  pLoad: number;   // power dissipated in load
+  efficiency: number; // ideal efficiency (always 100% in ideal, but shows the value)
+  isCCM: boolean;
 }
 
 export function calculate(p: SimParams): SimResults {
@@ -23,7 +34,22 @@ export function calculate(p: SimParams): SimResults {
   const iLAvg = iOut / (1 - D);
   const deltaVout = (iOut * D) / (p.frequency * p.capacitance);
 
-  return { vout, deltaIL, iLAvg, iOut, deltaVout };
+  const iLMin = iLAvg - deltaIL / 2;
+  const iLMax = iLAvg + deltaIL / 2;
+  const vL_on = p.vin;
+  const vL_off = vout; // negative
+  const iDiode = iOut; // average diode current = Iout in CCM
+  const pOut = Math.abs(vout) * iOut;
+  const pIn = p.vin * iLAvg * D;
+  const pLoad = iOut * iOut * p.resistance;
+  const efficiency = pIn > 0 ? (pOut / pIn) * 100 : 0;
+  const isCCM = iLMin > 0;
+
+  return {
+    vout, deltaIL, iLAvg, iOut, deltaVout,
+    iLMin, iLMax, vL_on, vL_off, iDiode,
+    pIn, pOut, pLoad, efficiency, isCCM,
+  };
 }
 
 export interface WaveformData {

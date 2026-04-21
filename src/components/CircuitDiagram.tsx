@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { SimParams, SimResults } from "@/lib/simulation";
 
 interface CircuitDiagramProps {
@@ -73,7 +73,8 @@ function Probe({
 }
 
 export default function CircuitDiagram({ params, results }: CircuitDiagramProps) {
-  const [switchOn, setSwitchOn] = useState(true);
+  const [phase, setPhase] = useState<"on" | "off" | "idle">("on");
+  const [viewMode, setViewMode] = useState<"auto" | "ccm" | "dcm">("auto");
 
   const { vin, dutyCycle, frequency, inductance, capacitance, resistance } = params;
   const {
@@ -81,6 +82,7 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
     iLMin, iLMax, vL_on, vL_off, iDiode,
     pIn, pOut, pLoad, isCCM,
   } = results;
+  const visualIsCCM = viewMode === "auto" ? isCCM : viewMode === "ccm";
 
   // Display-friendly values (avoid floating point junk)
   const lDisp = Math.round(inductance * 1e6);
@@ -88,25 +90,14 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
   const rDisp = Math.round(resistance * 10) / 10;
   const dDisp = Math.round(dutyCycle * 100);
 
-  // Auto-toggle switch ON/OFF based on duty cycle
-  useEffect(() => {
-    const scaledPeriod = Math.max(500, Math.min(2000, 1200));
-    const onTime = scaledPeriod * dutyCycle;
-    const offTime = scaledPeriod * (1 - dutyCycle);
-    let timeout: ReturnType<typeof setTimeout>;
-    let active = true;
-    const toggle = (on: boolean) => {
-      if (!active) return;
-      setSwitchOn(on);
-      timeout = setTimeout(() => toggle(!on), on ? onTime : offTime);
-    };
-    toggle(true);
-    return () => { active = false; clearTimeout(timeout); };
-  }, [dutyCycle, frequency]);
-
   const act = "#22d3ee";
+  const idle = "#f59e0b";
   const dim = "#27303d";
-  const sw = switchOn ? "#22c55e" : "#ef4444";
+  const isOn = phase === "on";
+  const isOff = phase === "off";
+  const isIdle = phase === "idle";
+  const idleAllowed = !visualIsCCM;
+  const sw = isOn ? "#22c55e" : isIdle ? idle : "#ef4444";
 
   // Current flow line thickness scales with iLAvg (1.5 → 4px)
   const flowW = Math.max(1.5, Math.min(4, 1.5 + iLAvg * 0.8));
@@ -119,24 +110,90 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400 text-xs">🔧</span>
           Circuit Topology — Live Data
         </h3>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          <div className="inline-flex rounded-md border border-gray-700 bg-gray-900/70 p-0.5 text-[11px]">
+            <button
+              onClick={() => {
+                setViewMode("auto");
+                if ((isCCM ? true : false) && phase === "idle") {
+                  setPhase("off");
+                }
+              }}
+              className={`px-2 py-1 rounded ${viewMode === "auto" ? "bg-gray-700 text-gray-100" : "text-gray-400 hover:text-gray-200"}`}
+            >
+              Auto
+            </button>
+            <button
+              onClick={() => {
+                setViewMode("ccm");
+                if (phase === "idle") {
+                  setPhase("off");
+                }
+              }}
+              className={`px-2 py-1 rounded ${viewMode === "ccm" ? "bg-blue-700/70 text-blue-100" : "text-gray-400 hover:text-gray-200"}`}
+            >
+              CCM
+            </button>
+            <button
+              onClick={() => setViewMode("dcm")}
+              className={`px-2 py-1 rounded ${viewMode === "dcm" ? "bg-amber-700/70 text-amber-100" : "text-gray-400 hover:text-gray-200"}`}
+            >
+              DCM
+            </button>
+          </div>
+          <div className="inline-flex rounded-md border border-gray-700 bg-gray-900/70 p-0.5 text-[11px]">
+            <button
+              onClick={() => setPhase("on")}
+              className={`px-2 py-1 rounded ${isOn ? "bg-emerald-700/70 text-emerald-100" : "text-gray-400 hover:text-gray-200"}`}
+            >
+              ON
+            </button>
+            <button
+              onClick={() => setPhase("off")}
+              className={`px-2 py-1 rounded ${isOff ? "bg-red-700/70 text-red-100" : "text-gray-400 hover:text-gray-200"}`}
+            >
+              OFF
+            </button>
+            <button
+              onClick={() => idleAllowed && setPhase("idle")}
+              disabled={!idleAllowed}
+              className={`px-2 py-1 rounded ${isIdle ? "bg-amber-700/70 text-amber-100" : "text-gray-400 hover:text-gray-200"} ${!idleAllowed ? "opacity-40 cursor-not-allowed" : ""}`}
+            >
+              IDLE
+            </button>
+          </div>
           <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all duration-200 ${
-            switchOn
+            isOn
               ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+              : isIdle
+              ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
               : "bg-red-500/15 text-red-400 border border-red-500/30"
           }`}>
-            <span className={`h-2 w-2 rounded-full ${switchOn ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
-            Switch {switchOn ? "ON" : "OFF"}
+            <span className={`h-2 w-2 rounded-full ${isOn ? "bg-emerald-400 animate-pulse" : isIdle ? "bg-amber-400" : "bg-red-400"}`} />
+            {isOn ? "Switch ON" : isOff ? "Switch OFF" : "Idle (IL=0)"}
           </span>
           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-            isCCM
+            visualIsCCM
               ? "bg-blue-500/15 text-blue-400 border border-blue-500/20"
               : "bg-amber-500/15 text-amber-400 border border-amber-500/20"
           }`}>
-            {isCCM ? "CCM" : "DCM"}
+            {visualIsCCM ? "CCM view" : "DCM view"}
           </span>
+          {viewMode !== "auto" && (
+            <span className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold bg-gray-800 text-gray-300 border border-gray-700">
+              Actual: {isCCM ? "CCM" : "DCM"}
+            </span>
+          )}
         </div>
       </div>
+
+      {!visualIsCCM && (
+        <div className="mb-3 grid grid-cols-3 gap-2 text-[11px]">
+          <div className={`rounded-md border px-2 py-1 font-medium text-center ${isOn ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300" : "border-gray-700 text-gray-500"}`}>Phase 1: ON (L charge)</div>
+          <div className={`rounded-md border px-2 py-1 font-medium text-center ${isOff ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-300" : "border-gray-700 text-gray-500"}`}>Phase 2: OFF (L discharge)</div>
+          <div className={`rounded-md border px-2 py-1 font-medium text-center ${isIdle ? "border-amber-500/50 bg-amber-500/15 text-amber-300" : "border-gray-700 text-gray-500"}`}>Phase 3: IDLE (C feeds load)</div>
+        </div>
+      )}
 
       <svg viewBox="0 0 780 420" className="w-full" style={{ maxHeight: 420 }}>
         <defs>
@@ -179,17 +236,17 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
         <line x1={75} y1={200} x2={75} y2={300} stroke="#f59e0b" strokeWidth={2} />
 
         {/* ═══════════ TOP RAIL → SWITCH ═══════════ */}
-        <line x1={75} y1={65} x2={200} y2={65} stroke={switchOn ? act : dim} strokeWidth={flowW} className={switchOn ? "cf" : ""} />
+        <line x1={75} y1={65} x2={200} y2={65} stroke={isOn ? act : dim} strokeWidth={flowW} className={isOn ? "cf" : ""} />
 
         {/* ═══════════ SWITCH (MOSFET) ═══════════ */}
         <rect x={200} y={42} width={70} height={46} rx={7}
-          fill={switchOn ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)"}
+          fill={isOn ? "rgba(34,197,94,0.08)" : isIdle ? "rgba(245,158,11,0.08)" : "rgba(239,68,68,0.08)"}
           stroke={sw} strokeWidth={2} className="transition-all duration-300" />
         <text x={235} y={62} textAnchor="middle" fill={sw} fontSize={11} fontWeight="bold" fontFamily="monospace">
-          Q: {switchOn ? "ON" : "OFF"}
+          Q: {isOn ? "ON" : "OFF"}
         </text>
         <text x={235} y={80} textAnchor="middle" fill="#6b7280" fontSize={8} fontFamily="monospace">
-          MOSFET
+          {isIdle ? "No inductor current" : "MOSFET"}
         </text>
         {/* PWM info */}
         <text x={235} y={35} textAnchor="middle" fill="#6b7280" fontSize={8} fontFamily="monospace">
@@ -197,17 +254,17 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
         </text>
 
         {/* Switch → junction */}
-        <line x1={270} y1={65} x2={320} y2={65} stroke={switchOn ? act : dim} strokeWidth={flowW} className={switchOn ? "cf" : ""}/>
+        <line x1={270} y1={65} x2={320} y2={65} stroke={isOn ? act : dim} strokeWidth={flowW} className={isOn ? "cf" : ""}/>
         {/* Junction node */}
         <circle cx={320} cy={65} r={4} fill={act} opacity={.8} />
 
         {/* ═══════════ INDUCTOR (vertical) ═══════════ */}
-        <line x1={320} y1={65} x2={320} y2={110} stroke={act} strokeWidth={flowW} className="cf" />
+        <line x1={320} y1={65} x2={320} y2={110} stroke={isIdle ? dim : act} strokeWidth={flowW} className={isIdle ? "" : "cf"} />
         <path
           d="M320,110 Q342,120 320,130 Q298,140 320,150 Q342,160 320,170 Q298,180 320,190"
           fill="none" stroke="#818cf8" strokeWidth={2.5} strokeLinecap="round" />
-        <line x1={320} y1={190} x2={320} y2={240} stroke={act} strokeWidth={flowW} className="cf" />
-        <line x1={320} y1={240} x2={320} y2={300} stroke={act} strokeWidth={flowW} className="cf" />
+        <line x1={320} y1={190} x2={320} y2={240} stroke={isIdle ? dim : act} strokeWidth={flowW} className={isIdle ? "" : "cf"} />
+        <line x1={320} y1={240} x2={320} y2={300} stroke={isIdle ? dim : act} strokeWidth={flowW} className={isIdle ? "" : "cf"} />
 
         {/* L label + value */}
         <rect x={335} y={138} width={62} height={26} rx={4} fill="rgba(99,102,241,0.08)" stroke="rgba(99,102,241,0.25)" strokeWidth={1} />
@@ -215,45 +272,51 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
         <text x={366} y={160} textAnchor="middle" fill="#a5b4fc" fontSize={11} fontWeight="bold" fontFamily="monospace">{lDisp}µH</text>
 
         {/* ── Inductor live probes ── */}
-        {switchOn && (
+        {isOn && (
           <Probe x={190} y={155} label="V_L (ON)" value={fmt(vL_on, 1)} unit="V" color="#818cf8" anchor="end" />
         )}
-        {!switchOn && (
+        {isOff && (
           <Probe x={190} y={155} label="V_L (OFF)" value={fmt(vL_off, 1)} unit="V" color="#c084fc" anchor="end" />
+        )}
+        {isIdle && (
+          <Probe x={190} y={155} label="V_L (IDLE)" value={fmt(0, 1)} unit="V" color="#f59e0b" anchor="end" />
         )}
 
         {/* ═══════════ DIODE ═══════════ */}
         <line x1={320} y1={65} x2={450} y2={65}
-          stroke={!switchOn ? act : dim} strokeWidth={flowW} className={!switchOn ? "cf" : ""} />
+          stroke={isOff ? act : dim} strokeWidth={flowW} className={isOff ? "cf" : ""} />
         {/* Diode triangle + bar */}
         <g transform="translate(460,45)">
           <polygon points="0,0 22,0 11,28"
-            fill={!switchOn ? "rgba(34,211,238,0.12)" : "none"}
-            stroke={!switchOn ? act : dim} strokeWidth={2} />
-          <line x1={0} y1={28} x2={22} y2={28} stroke={!switchOn ? act : dim} strokeWidth={2.5} />
+            fill={isOff ? "rgba(34,211,238,0.12)" : "none"}
+            stroke={isOff ? act : dim} strokeWidth={2} />
+          <line x1={0} y1={28} x2={22} y2={28} stroke={isOff ? act : dim} strokeWidth={2.5} />
         </g>
         <text x={500} y={63} fill="#6b7280" fontSize={9} fontFamily="monospace">D</text>
         {/* Diode → output rail */}
         <line x1={471} y1={73} x2={471} y2={105}
-          stroke={!switchOn ? act : dim} strokeWidth={flowW} className={!switchOn ? "cf" : ""} />
+          stroke={isOff ? act : dim} strokeWidth={flowW} className={isOff ? "cf" : ""} />
 
         {/* Diode probe */}
-        {!switchOn && (
+        {isOff && (
           <Probe x={505} y={48} label="I_D" value={fmt(iDiode, 2)} unit="A" color="#22d3ee" />
+        )}
+        {isIdle && (
+          <Probe x={505} y={48} label="I_D" value={fmt(0, 2)} unit="A" color="#f59e0b" />
         )}
 
         {/* ═══════════ OUTPUT NODE RAIL (horizontal) ═══════════ */}
         <line x1={471} y1={105} x2={545} y2={105}
-          stroke={!switchOn ? act : dim} strokeWidth={flowW - 0.5} className={!switchOn ? "cf" : ""} />
+          stroke={isOff ? act : isIdle ? idle : dim} strokeWidth={flowW - 0.5} className={isOff || isIdle ? "cf" : ""} />
         <line x1={590} y1={105} x2={640} y2={105}
-          stroke={!switchOn ? act : dim} strokeWidth={flowW - 0.5} className={!switchOn ? "cf" : ""} />
+          stroke={isOff ? act : isIdle ? idle : dim} strokeWidth={flowW - 0.5} className={isOff || isIdle ? "cf" : ""} />
 
         {/* ═══════════ CAPACITOR ═══════════ */}
         <line x1={545} y1={80} x2={545} y2={130} stroke="#34d399" strokeWidth={2.5} />
         <line x1={555} y1={80} x2={555} y2={130} stroke="#34d399" strokeWidth={2.5} />
         {/* C down to GND */}
         <line x1={550} y1={130} x2={550} y2={300}
-          stroke={!switchOn ? act : dim} strokeWidth={1.5} className={!switchOn ? "cf" : ""} />
+          stroke={isOff ? act : isIdle ? idle : dim} strokeWidth={1.5} className={isOff || isIdle ? "cf" : ""} />
         <line x1={550} y1={80} x2={550} y2={65}
           stroke={dim} strokeWidth={1} />
 
@@ -271,7 +334,7 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
           fill="none" stroke="#fb923c" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
         {/* R down to GND */}
         <line x1={640} y1={220} x2={640} y2={300}
-          stroke={!switchOn ? act : dim} strokeWidth={flowW - 0.5} className={!switchOn ? "cf" : ""} />
+          stroke={isOff ? act : isIdle ? idle : dim} strokeWidth={flowW - 0.5} className={isOff || isIdle ? "cf" : ""} />
         {/* + polarity at bottom */}
         <text x={648} y={295} fill="#22c55e" fontSize={13} fontWeight="bold">+</text>
 
@@ -282,11 +345,11 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
 
         {/* GND return */}
         <line x1={320} y1={300} x2={640} y2={300}
-          stroke={!switchOn ? act : dim} strokeWidth={flowW - 0.5} className={!switchOn ? "cf" : ""} />
+          stroke={isOff ? act : isIdle ? idle : dim} strokeWidth={flowW - 0.5} className={isOff || isIdle ? "cf" : ""} />
         <line x1={75} y1={300} x2={320} y2={300} stroke="#3f4957" strokeWidth={2} />
 
         {/* ═══════════ CURRENT FLOW ARROWS ═══════════ */}
-        {switchOn && (
+        {isOn && (
           <g className="glow">
             <polyline points="110,65 195,65" fill="none" stroke={act} strokeWidth={2} markerEnd="url(#arr)" />
             <text x={145} y={57} fill={act} fontSize={8} fontFamily="monospace">I_L →</text>
@@ -295,7 +358,7 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
             <text x={275} y={228} fill={act} fontSize={8} fontFamily="monospace">↓ {fmt(iLAvg)}A</text>
           </g>
         )}
-        {!switchOn && (
+        {isOff && (
           <g className="glow">
             <polyline points="330,65 445,65" fill="none" stroke={act} strokeWidth={2} markerEnd="url(#arr)" />
             <text x={365} y={57} fill={act} fontSize={8} fontFamily="monospace">I_D →</text>
@@ -304,6 +367,15 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
             {/* Return path along GND */}
             <polyline points="625,308 340,308" fill="none" stroke={act} strokeWidth={1.5} markerEnd="url(#arr)" opacity={.5} />
             <text x={465} y={322} fill={act} fontSize={8} fontFamily="monospace">← return</text>
+          </g>
+        )}
+        {isIdle && (
+          <g className="glow">
+            <polyline points="560,105 635,105" fill="none" stroke={idle} strokeWidth={2} markerEnd="url(#arr)" />
+            <text x={586} y={97} fill={idle} fontSize={8} fontFamily="monospace">I_C → load</text>
+            <line x1={648} y1={115} x2={648} y2={210} stroke={idle} strokeWidth={1.5} markerEnd="url(#arr)" opacity={.7} />
+            <polyline points="625,308 548,308" fill="none" stroke={idle} strokeWidth={1.5} markerEnd="url(#arr)" opacity={.5} />
+            <text x={558} y={322} fill={idle} fontSize={8} fontFamily="monospace">capacitor discharge</text>
           </g>
         )}
 
@@ -321,19 +393,21 @@ export default function CircuitDiagram({ params, results }: CircuitDiagramProps)
         <Probe x={190} y={193} label="I_L avg" value={fmt(iLAvg, 3)} unit="A" color="#818cf8" anchor="end" />
 
         {/* IL min / max */}
-        <Probe x={190} y={230} label="I_L min" value={fmt(iLMin, 3)} unit="A" color={isCCM ? "#22d3ee" : "#fbbf24"} anchor="end" />
+        <Probe x={190} y={230} label="I_L min" value={fmt(iLMin, 3)} unit="A" color={visualIsCCM ? "#22d3ee" : "#fbbf24"} anchor="end" />
         <Probe x={190} y={267} label="I_L max" value={fmt(iLMax, 3)} unit="A" color="#22d3ee" anchor="end" />
 
         {/* ═══════════ PHASE INFO BAR ═══════════ */}
         <rect x={20} y={340} width={740} height={68} rx={9}
-          fill={switchOn ? "rgba(34,197,94,0.05)" : "rgba(239,68,68,0.05)"}
-          stroke={switchOn ? "rgba(34,197,94,0.18)" : "rgba(239,68,68,0.18)"} strokeWidth={1} />
+          fill={isOn ? "rgba(34,197,94,0.05)" : isOff ? "rgba(239,68,68,0.05)" : "rgba(245,158,11,0.08)"}
+          stroke={isOn ? "rgba(34,197,94,0.18)" : isOff ? "rgba(239,68,68,0.18)" : "rgba(245,158,11,0.25)"} strokeWidth={1} />
 
         <text x={390} y={362} textAnchor="middle"
-          fill={switchOn ? "#86efac" : "#fca5a5"} fontSize={11} fontFamily="monospace">
-          {switchOn
+          fill={isOn ? "#86efac" : isOff ? "#fca5a5" : "#fcd34d"} fontSize={11} fontFamily="monospace">
+          {isOn
             ? `▶ ON:  Vin(${fmt(vin,1)}V) → Q → L(${lDisp}µH) → GND  |  Energy stored in inductor`
-            : `▶ OFF:  L → D → C(${cDisp}µF) ∥ R(${rDisp}Ω) → GND  |  Energy delivered to load`}
+            : isOff
+            ? `▶ OFF:  L → D → C(${cDisp}µF) ∥ R(${rDisp}Ω) → GND  |  Energy delivered to load`
+            : `▶ IDLE (DCM only):  IL = 0, diode OFF, load fed by capacitor C(${cDisp}µF)`}
         </text>
 
         {/* Power info */}
